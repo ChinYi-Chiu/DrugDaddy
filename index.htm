@@ -1,0 +1,355 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Heart, Activity, Beer, Smile, Skull, MessageSquare, ShieldAlert, Award } from 'lucide-react';
+
+const App = () => {
+  // 遊戲常量設定
+  const APP_ID = 'dad-pet-v2';
+  const CANVAS_WIDTH = 160;
+  const CANVAS_HEIGHT = 120;
+  const WIN_CONDITION_DAYS = 14;
+
+  // 狀態管理
+  const [dadType, setDadType] = useState(null);
+  const [stats, setStats] = useState({
+    health: 80,
+    addiction: 50,
+    love: 30,
+    mood: 50,
+    recoveryProgress: 0,
+    days: 1,
+    isDead: false,
+    hasWon: false
+  });
+  const [dialogue, setDialogue] = useState("選擇一個老爸，開始這段痛苦的旅程。");
+  const [eventEffect, setEventEffect] = useState(null);
+  const canvasRef = useRef(null);
+
+  const dadProfiles = {
+    'DRUGS': { name: '藥癮老爸', substance: '強效止痛藥', color: '#A78BFA', bg: 'bg-purple-900' },
+    'ALCOHOL': { name: '酒鬼老爸', substance: '廉價威士忌', color: '#FBBF24', bg: 'bg-amber-900' },
+    'CIGARETTES': { name: '老菸槍', substance: '劣質捲菸', color: '#9CA3AF', bg: 'bg-slate-800' },
+    'GAMBLING': { name: '賭徒老爸', substance: '地下明牌', color: '#F87171', bg: 'bg-red-950' }
+  };
+
+  // 渲染像素畫面
+  const drawPixelArt = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    // 清除畫布
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // 繪製背景裝飾 (簡單的地板線)
+    ctx.strokeStyle = '#333';
+    ctx.beginPath();
+    ctx.moveTo(0, 90);
+    ctx.lineTo(CANVAS_WIDTH, 90);
+    ctx.stroke();
+
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = 75;
+    const time = Date.now() / 1000;
+    const breathe = Math.sin(time * 3) * 2;
+
+    if (stats.isDead) {
+        // 死亡狀態
+        ctx.fillStyle = '#444';
+        ctx.fillRect(centerX - 15, centerY - 5, 30, 15); // 躺下
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px monospace';
+        ctx.fillText("X_X", centerX - 10, centerY - 10);
+    } else if (stats.hasWon) {
+        // 獲勝狀態 (西裝革履)
+        ctx.fillStyle = '#34D399'; // 綠色領帶感
+        ctx.fillRect(centerX - 8, centerY - 25, 16, 25);
+        ctx.fillStyle = '#FDE047'; // 亮色頭部
+        ctx.fillRect(centerX - 6, centerY - 32, 12, 10);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(centerX - 4, centerY - 29, 2, 2);
+        ctx.fillRect(centerX + 2, centerY - 29, 2, 2);
+    } else {
+        // 角色身體
+        const bodyColor = dadProfiles[dadType]?.color || '#fff';
+        ctx.fillStyle = bodyColor;
+        ctx.globalAlpha = 0.8;
+        ctx.fillRect(centerX - 10, centerY - 20 + breathe, 20, 20);
+        
+        // 衣服/細節
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(centerX - 8, centerY - 15 + breathe, 16, 12);
+
+        // 頭部
+        ctx.fillStyle = '#FFDAB9';
+        ctx.fillRect(centerX - 7, centerY - 30 + breathe * 1.2, 14, 12);
+
+        // 眼睛
+        ctx.fillStyle = '#000';
+        if (stats.addiction > 70) {
+            // 毒癮發作眼
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(centerX - 4, centerY - 25 + breathe, 2, 2);
+            ctx.fillRect(centerX + 2, centerY - 25 + breathe, 2, 2);
+        } else {
+            ctx.fillRect(centerX - 4, centerY - 26 + breathe, 2, 2);
+            ctx.fillRect(centerX + 2, centerY - 26 + breathe, 2, 2);
+        }
+
+        // 隨機抖動 (當成癮高時)
+        if (stats.addiction > 80 && Math.random() > 0.5) {
+            ctx.translate(Math.random() * 2 - 1, 0);
+        }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // 重置矩陣
+  }, [stats, dadType]);
+
+  // 遊戲循環
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (stats.isDead || stats.hasWon || !dadType) return;
+
+      setStats(prev => {
+        let newHealth = prev.health - 0.05;
+        let newAddiction = prev.addiction + 0.08;
+        let newRecovery = prev.recoveryProgress;
+        let newMood = prev.mood - 0.03;
+
+        // 當成癮歸零時的修復邏輯
+        if (prev.addiction <= 0) {
+            newAddiction = 0;
+            newHealth += 0.15; // 健康恢復快
+            if (prev.health > 70 && prev.mood > 60) {
+                newRecovery += 0.5; // 累積戒毒進度
+            }
+        }
+
+        // 數值邊界
+        newHealth = Math.min(100, Math.max(0, newHealth));
+        newAddiction = Math.min(100, Math.max(0, newAddiction));
+        newRecovery = Math.min(100, newRecovery);
+        newMood = Math.min(100, Math.max(0, newMood));
+
+        // 檢查結局
+        const isDead = newHealth <= 0;
+        const hasWon = newRecovery >= 100;
+
+        if (isDead) setDialogue("悲劇發生了，老爸沒能撐過去...");
+        if (hasWon) setDialogue("不可思議...老爸真的戒掉了！他找回了正常的生活。");
+
+        return { ...prev, health: newHealth, addiction: newAddiction, recoveryProgress: newRecovery, mood: newMood, isDead, hasWon };
+      });
+
+      drawPixelArt();
+    }, 200);
+
+    return () => clearInterval(timer);
+  }, [dadType, stats.isDead, stats.hasWon, drawPixelArt]);
+
+  // 隨機事件處理
+  useEffect(() => {
+    if (!dadType || stats.isDead || stats.hasWon) return;
+
+    const eventTimer = setInterval(() => {
+      if (Math.random() > 0.85) {
+        triggerRandomEvent();
+      }
+    }, 8000);
+
+    return () => clearInterval(eventTimer);
+  }, [dadType, stats.isDead, stats.hasWon]);
+
+  const triggerRandomEvent = () => {
+    const events = [
+      { 
+        msg: "鄰居報警投訴老爸半夜大吼大叫，警察上門警告了。", 
+        effect: () => setStats(s => ({...s, mood: s.mood - 20, love: s.love - 5}))
+      },
+      { 
+        msg: "老爸偷偷賣掉了你的舊遊戲機去換錢...", 
+        effect: () => setStats(s => ({...s, love: s.love - 25, addiction: s.addiction + 10}))
+      },
+      { 
+        msg: "今天老爸清醒時幫你煮了一碗麵，雖然很鹹。", 
+        effect: () => setStats(s => ({...s, love: s.love + 15, mood: s.mood + 10}))
+      },
+      { 
+        msg: "債主在門外潑漆，老爸嚇得全身發抖。", 
+        effect: () => setStats(s => ({...s, health: s.health - 5, mood: s.mood - 30}))
+      }
+    ];
+    const e = events[Math.floor(Math.random() * events.length)];
+    setDialogue(`[事件] ${e.msg}`);
+    e.effect();
+    setEventEffect("EVENT!");
+    setTimeout(() => setEventEffect(null), 2000);
+  };
+
+  // 互動函式
+  const interact = (action) => {
+    if (stats.isDead || stats.hasWon) return;
+
+    let d = "";
+    setStats(prev => {
+        let { health, addiction, love, mood } = prev;
+        switch(action) {
+            case 'ENCOURAGE':
+                d = "老爸：「我...我會試著少碰一點。」";
+                love += 3; mood += 5; addiction -= 4;
+                break;
+            case 'HUMILIATE':
+                d = "老爸：「隨便你怎麼說，反正我是個人渣！」";
+                love -= 8; mood -= 15; addiction += 2;
+                break;
+            case 'CARE':
+                d = "老爸眼眶泛紅，點了點頭。";
+                love += 10; mood += 10;
+                break;
+            case 'THREAT':
+                d = "你威脅要舉報他，他露出了恐懼的眼神。";
+                addiction -= 10; mood -= 10; love -= 5;
+                break;
+            case 'GIVE':
+                d = `老爸興奮地接過${dadProfiles[dadType].substance}，手都在抖。`;
+                addiction += 25; health -= 8; mood += 40;
+                break;
+            case 'BEAT':
+                d = "暴力解決不了問題，但讓你發洩了憤怒。老爸受傷了。";
+                health -= 15; love -= 20; mood -= 20; addiction -= 5;
+                break;
+            default: break;
+        }
+        return { ...prev, health, addiction, love, mood };
+    });
+    setDialogue(d);
+  };
+
+  // 介面渲染
+  if (!dadType) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 p-6 text-zinc-200">
+        <h1 className="text-3xl font-black text-red-500 mb-8 tracking-tighter">FALLEN DAD SIM</h1>
+        <div className="grid grid-cols-1 gap-4 w-full max-w-xs">
+          {Object.entries(dadProfiles).map(([id, p]) => (
+            <button 
+              key={id}
+              onClick={() => setDadType(id)}
+              className={`${p.bg} p-4 rounded border-2 border-white/20 hover:border-white transition-all text-left group`}
+            >
+              <div className="font-bold text-lg">{p.name}</div>
+              <div className="text-xs opacity-60">主要成癮物: {p.substance}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-start min-h-screen bg-zinc-900 text-zinc-100 font-mono p-4">
+      {/* 模擬手持裝置 */}
+      <div className="relative bg-zinc-800 p-4 rounded-[2rem] border-4 border-zinc-700 shadow-2xl w-full max-w-sm">
+        
+        {/* 頂部狀態列 */}
+        <div className="flex justify-between items-center mb-2 px-2 text-[10px] uppercase tracking-widest text-zinc-500">
+          <span>Day {Math.floor(stats.days)}</span>
+          <div className="flex gap-2">
+            {eventEffect && <span className="text-red-500 animate-pulse">{eventEffect}</span>}
+            <span>{dadProfiles[dadType].name}</span>
+          </div>
+        </div>
+
+        {/* 像素螢幕 */}
+        <div className="bg-black rounded-lg p-2 border-4 border-zinc-950 overflow-hidden">
+            <canvas 
+                ref={canvasRef} 
+                width={CANVAS_WIDTH} 
+                height={CANVAS_HEIGHT} 
+                className="w-full aspect-[4/3] image-rendering-pixelated"
+            />
+        </div>
+
+        {/* 數值儀表盤 */}
+        <div className="grid grid-cols-2 gap-3 mt-4 px-2">
+            <div className="space-y-1">
+                <div className="flex justify-between text-[10px]"><span className="flex items-center gap-1"><Activity size={10}/> 健康</span><span>{Math.round(stats.health)}%</span></div>
+                <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden">
+                    <div className="h-full bg-green-500" style={{width: `${stats.health}%`}} />
+                </div>
+            </div>
+            <div className="space-y-1">
+                <div className="flex justify-between text-[10px]"><span className="flex items-center gap-1"><Beer size={10}/> 成癮</span><span>{Math.round(stats.addiction)}%</span></div>
+                <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden">
+                    <div className="h-full bg-red-600" style={{width: `${stats.addiction}%`}} />
+                </div>
+            </div>
+            <div className="space-y-1">
+                <div className="flex justify-between text-[10px]"><span className="flex items-center gap-1"><Heart size={10}/> 親密</span><span>{Math.round(stats.love)}%</span></div>
+                <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500" style={{width: `${stats.love}%`}} />
+                </div>
+            </div>
+            <div className="space-y-1">
+                <div className="flex justify-between text-[10px]"><span className="flex items-center gap-1"><Award size={10}/> 戒毒進度</span><span>{Math.round(stats.recoveryProgress)}%</span></div>
+                <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden">
+                    <div className="h-full bg-yellow-500" style={{width: `${stats.recoveryProgress}%`}} />
+                </div>
+            </div>
+        </div>
+
+        {/* 對話框 */}
+        <div className="mt-4 bg-zinc-900/50 p-3 rounded-xl border border-white/5 min-h-[80px] text-xs leading-relaxed italic text-zinc-300">
+            <MessageSquare size={12} className="mb-1 opacity-30" />
+            {dialogue}
+        </div>
+
+        {/* 控制按鈕組 */}
+        <div className="mt-6 grid grid-cols-3 gap-2 pb-4">
+            <button onClick={() => interact('ENCOURAGE')} className="aspect-square bg-zinc-700 rounded-full flex flex-col items-center justify-center text-[10px] border-b-4 border-zinc-900 active:translate-y-1 active:border-b-0 transition-all">
+                <Smile size={16} /> 鼓勵
+            </button>
+            <button onClick={() => interact('CARE')} className="aspect-square bg-zinc-700 rounded-full flex flex-col items-center justify-center text-[10px] border-b-4 border-zinc-900 active:translate-y-1 active:border-b-0 transition-all">
+                <Heart size={16} /> 關心
+            </button>
+            <button onClick={() => interact('THREAT')} className="aspect-square bg-orange-800 rounded-full flex flex-col items-center justify-center text-[10px] border-b-4 border-orange-950 active:translate-y-1 active:border-b-0 transition-all">
+                <ShieldAlert size={16} /> 威脅
+            </button>
+            <button onClick={() => interact('HUMILIATE')} className="aspect-square bg-zinc-800 rounded-full flex flex-col items-center justify-center text-[10px] border-b-4 border-black active:translate-y-1 active:border-b-0 transition-all">
+                羞辱
+            </button>
+            <button onClick={() => interact('GIVE')} className="aspect-square bg-red-900 rounded-full flex flex-col items-center justify-center text-[10px] border-b-4 border-red-950 active:translate-y-1 active:border-b-0 transition-all">
+                <Beer size={16} /> 供給
+            </button>
+            <button onClick={() => interact('BEAT')} className="aspect-square bg-zinc-800 rounded-full flex flex-col items-center justify-center text-[10px] border-b-4 border-black active:translate-y-1 active:border-b-0 transition-all">
+                <Skull size={16} /> 毆打
+            </button>
+        </div>
+      </div>
+
+      <div className="mt-6 text-[10px] opacity-40 text-center max-w-xs">
+        提示：若要戒毒成功，必須先透過「威脅」或「鼓勵」讓成癮度降至 0，隨後保持高健康與高情緒值直到進度條滿。
+      </div>
+
+      {/* 結局覆蓋層 */}
+      {(stats.isDead || stats.hasWon) && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 p-8 text-center backdrop-blur-sm">
+            <div>
+                <h2 className={`text-4xl font-black mb-4 ${stats.hasWon ? 'text-green-500' : 'text-red-600'}`}>
+                    {stats.hasWon ? 'THE NEW START' : 'THE END'}
+                </h2>
+                <p className="mb-8 text-sm opacity-80">{dialogue}</p>
+                <button 
+                    onClick={() => window.location.reload()}
+                    className="bg-white text-black px-8 py-2 rounded-full font-bold hover:bg-zinc-200"
+                >
+                    重新開始
+                </button>
+            </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;
