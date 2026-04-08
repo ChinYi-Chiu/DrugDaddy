@@ -3,15 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>墮落老爹：全方位環境模擬器</title>
+    <title>墮落老爹：音訊優化版</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
         body { background-color: #020617; color: #f8fafc; font-family: 'DotGothic16', sans-serif; overflow: hidden; touch-action: manipulation; }
         canvas { image-rendering: pixelated; display: block; margin: 0 auto; background: #000; border: 4px solid #1e293b; max-width: 100%; height: auto; }
         .pixel-border { border: 4px solid #334155; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
         .glass-ui { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); }
-        input[type="range"] { accent-color: #ef4444; }
+        input[type="range"] { accent-color: #ef4444; height: 4px; }
+        .setting-panel { transform: translateX(110%); transition: transform 0.3s ease-out; }
+        .setting-panel.open { transform: translateX(0); }
     </style>
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen p-2 sm:p-4">
@@ -19,44 +23,42 @@
     <!-- 初始設定界面 -->
     <div id="setup-overlay" class="fixed inset-0 z-50 flex items-center justify-center glass-ui">
         <div class="bg-slate-900 p-6 sm:p-8 rounded-2xl border-2 border-slate-700 text-center max-w-sm w-full shadow-2xl">
-            <h1 class="text-2xl font-bold text-red-500 mb-6 tracking-widest">角色初始化</h1>
-            
+            <h1 class="text-2xl font-bold text-red-500 mb-6 tracking-widest uppercase">墮落模擬器</h1>
             <div class="space-y-4 text-left">
                 <div>
-                    <label class="text-xs text-slate-400">你的名字</label>
+                    <label class="text-[10px] text-slate-400 uppercase">玩家姓名</label>
                     <input type="text" id="player-name-input" value="阿強" class="w-full bg-slate-800 border border-slate-600 p-2 rounded outline-none focus:border-red-500 text-sm">
                 </div>
                 <div>
-                    <label class="text-xs text-slate-400">設定城市 (僅顯示)</label>
+                    <label class="text-[10px] text-slate-400 uppercase">所在城市</label>
                     <input type="text" id="city-input" value="台北" class="w-full bg-slate-800 border border-slate-600 p-2 rounded outline-none text-sm">
                 </div>
                 <div>
-                    <label class="text-xs text-slate-400">時區設定 (UTC Offset)</label>
+                    <label class="text-[10px] text-slate-400 uppercase">時區設定 (UTC)</label>
                     <select id="timezone-input" class="w-full bg-slate-800 border border-slate-600 p-2 rounded outline-none text-sm">
                         <option value="-8">UTC-8 (洛杉磯)</option>
                         <option value="0">UTC+0 (倫敦)</option>
-                        <option value="8" selected>UTC+8 (台北/北京/香港)</option>
-                        <option value="9">UTC+9 (東京/首爾)</option>
+                        <option value="8" selected>UTC+8 (台北/香港)</option>
+                        <option value="9">UTC+9 (東京)</option>
                     </select>
                 </div>
             </div>
-
-            <button onclick="initGame()" class="w-full mt-8 bg-red-600 hover:bg-red-500 p-3 rounded font-bold transition-all active:scale-95 shadow-lg">
+            <button onclick="initGame()" class="w-full mt-8 bg-red-600 hover:bg-red-500 p-3 rounded font-bold transition-all active:scale-95 shadow-lg uppercase tracking-widest">
                 進入模擬環境
             </button>
-            <p class="mt-4 text-[10px] text-slate-500 italic">警告：環境音效將在點擊後啟動</p>
         </div>
     </div>
 
     <!-- 遊戲主界面 -->
-    <div id="game-ui" class="hidden w-full max-w-xl">
+    <div id="game-ui" class="hidden w-full max-w-xl relative overflow-hidden">
+        <!-- 頂部資訊 -->
         <div class="flex justify-between items-end mb-2 px-1">
             <div class="flex flex-col">
                 <div id="dad-title" class="text-xs sm:text-sm font-bold text-zinc-300">載入中...</div>
                 <div id="city-display" class="text-[10px] text-zinc-500">台北 | UTC+8</div>
             </div>
-            <div id="weather-display" class="text-right">
-                <div id="weather-text" class="text-[10px] text-sky-400 uppercase font-black">晴天</div>
+            <div class="text-right">
+                <div id="weather-text" class="text-[10px] text-sky-400 uppercase font-black">SUNNY</div>
                 <div id="clock-display" class="text-lg font-mono text-white leading-none">00:00:00</div>
             </div>
         </div>
@@ -64,140 +66,154 @@
         <canvas id="main-canvas" width="240" height="160" class="w-full pixel-border rounded-lg"></canvas>
 
         <!-- 數據面板 -->
-        <div class="grid grid-cols-2 gap-4 mt-4 glass-ui p-4 rounded-xl border border-slate-800 shadow-inner">
+        <div class="grid grid-cols-2 gap-4 mt-4 glass-ui p-4 rounded-xl border border-slate-800">
             <div class="space-y-1">
-                <div class="flex justify-between text-[10px] uppercase font-bold text-emerald-500"><span>健康狀態</span><span id="label-health">100%</span></div>
-                <div class="h-1.5 bg-black rounded-full overflow-hidden">
-                    <div id="bar-health" class="bg-emerald-500 h-full w-full transition-all duration-1000"></div>
-                </div>
+                <div class="flex justify-between text-[10px] uppercase font-bold text-emerald-500"><span>健康</span><span id="label-health">100%</span></div>
+                <div class="h-1 bg-black rounded-full overflow-hidden"><div id="bar-health" class="bg-emerald-500 h-full w-full"></div></div>
             </div>
             <div class="space-y-1">
-                <div class="flex justify-between text-[10px] uppercase font-bold text-red-600"><span>藥癮程度</span><span id="label-addiction">20%</span></div>
-                <div class="h-1.5 bg-black rounded-full overflow-hidden">
-                    <div id="bar-addiction" class="bg-red-600 h-full w-1/5 transition-all duration-1000"></div>
-                </div>
+                <div class="flex justify-between text-[10px] uppercase font-bold text-red-600"><span>毒癮</span><span id="label-addiction">20%</span></div>
+                <div class="h-1 bg-black rounded-full overflow-hidden"><div id="bar-addiction" class="bg-red-600 h-full w-1/5"></div></div>
             </div>
         </div>
 
-        <!-- 互動區 -->
-        <div class="flex gap-2 mt-4">
+        <!-- 對話與設定入口 -->
+        <div class="flex gap-2 mt-4 relative">
             <div id="dialogue" class="flex-grow p-3 bg-black/60 rounded-lg text-xs italic text-zinc-300 min-h-[50px] border-l-2 border-red-600 flex items-center">
-                等待數據同步...
+                環境同步完成。
             </div>
-            <div class="flex flex-col gap-1">
-                <button onclick="changeWeather()" class="bg-slate-800 p-2 rounded text-[10px] hover:bg-slate-700">切換天氣</button>
-                <div class="flex items-center gap-2 bg-slate-800 p-1 rounded">
-                    <span class="text-[10px] px-1">🔊</span>
-                    <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="0.5" class="w-12">
+            <button onclick="toggleSettings()" class="bg-slate-800 p-3 rounded-lg hover:bg-slate-700 transition-colors">
+                <i data-lucide="settings" class="w-5 h-5 text-zinc-400"></i>
+            </button>
+        </div>
+
+        <!-- 側邊設定面板 -->
+        <div id="setting-panel" class="setting-panel absolute top-0 right-0 h-full w-48 glass-ui border-l border-slate-700 p-4 z-20 flex flex-col gap-4">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-xs font-bold uppercase">音量設定</span>
+                <button onclick="toggleSettings()"><i data-lucide="x" class="w-4 h-4 text-zinc-500"></i></button>
+            </div>
+            
+            <div class="space-y-3">
+                <div class="space-y-1">
+                    <div class="flex justify-between text-[9px] text-zinc-400 uppercase"><span>背景音樂</span><span id="val-bgm">50%</span></div>
+                    <input type="range" id="vol-bgm" min="0" max="1" step="0.01" value="0.3" class="w-full" oninput="updateVolume()">
                 </div>
+                <div class="space-y-1">
+                    <div class="flex justify-between text-[9px] text-zinc-400 uppercase"><span>環境音效</span><span id="val-env">50%</span></div>
+                    <input type="range" id="vol-env" min="0" max="1" step="0.01" value="0.5" class="w-full" oninput="updateVolume()">
+                </div>
+            </div>
+
+            <div class="mt-4 pt-4 border-t border-slate-800 flex flex-col gap-2">
+                <button onclick="changeWeather()" class="bg-red-900/40 border border-red-900 text-[10px] py-2 rounded hover:bg-red-900/60 uppercase">切換天氣</button>
             </div>
         </div>
     </div>
 
     <script>
-        // --- 核心變數 ---
+        // --- 初始化與變數 ---
         const canvas = document.getElementById('main-canvas');
         const ctx = canvas.getContext('2d');
-        let playerName = "";
-        let cityName = "";
-        let utcOffset = 8;
-        let weatherType = "SUNNY"; 
-        let weatherParticles = [];
-        let flashOpacity = 0;
-        let audioCtx = null;
-        let bgmNode = null;
-        let noiseNode = null;
+        let playerName = "", cityName = "", utcOffset = 8;
+        let weatherType = "SUNNY", weatherParticles = [], flashOpacity = 0;
+        
+        // 音訊節點
+        let audioCtx, bgmGain, envGain;
+        let bgmOsc;
 
-        const state = {
-            health: 80,
-            addiction: 15,
-            isRecovering: false,
-            lastTick: Date.now()
-        };
+        const state = { health: 80, addiction: 15, isRecovering: false };
 
-        // --- 初始化 ---
         function initGame() {
             playerName = document.getElementById('player-name-input').value || "阿強";
             cityName = document.getElementById('city-input').value || "台北";
-            utcOffset = parseInt(document.getElementById('timezone-timezone-input')?.value || 8);
+            utcOffset = parseInt(document.getElementById('timezone-input').value);
             
             document.getElementById('setup-overlay').classList.add('hidden');
             document.getElementById('game-ui').classList.remove('hidden');
             document.getElementById('city-display').innerText = `${cityName} | UTC${utcOffset >= 0 ? '+' : ''}${utcOffset}`;
             
-            // 啟動渲染與音效
-            initAudio();
+            lucide.createIcons();
+            initAudioEngine();
             gameLoop();
         }
 
-        // --- 音效渲染系統 (Web Audio API) ---
-        function initAudio() {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            
-            // 1. 背景音樂渲染 (簡易方波旋律)
-            const playBGM = () => {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(110, audioCtx.currentTime); // A2
-                
-                // 憂鬱的 8-bit 旋律
-                const notes = [110, 123, 130, 146];
-                let i = 0;
-                setInterval(() => {
-                    osc.frequency.setTargetAtTime(notes[i % notes.length], audioCtx.currentTime, 0.1);
-                    i++;
-                }, 1000);
-
-                gain.gain.value = 0.02; // 很小聲的底噪感
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start();
-            };
-
-            // 2. 噪聲生成器 (用於雨聲與雷聲)
-            const createNoise = () => {
-                const bufferSize = 2 * audioCtx.sampleRate;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const output = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) {
-                    output[i] = Math.random() * 2 - 1;
-                }
-                const whiteNoise = audioCtx.createBufferSource();
-                whiteNoise.buffer = buffer;
-                whiteNoise.loop = true;
-
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = "lowpass";
-                filter.frequency.value = 400; // 預設雨聲偏低
-
-                const gain = audioCtx.createGain();
-                gain.gain.value = 0;
-
-                whiteNoise.connect(filter);
-                filter.connect(gain);
-                gain.connect(audioCtx.destination);
-                whiteNoise.start();
-                return { gain, filter };
-            };
-
-            playBGM();
-            noiseNode = createNoise();
-            updateAudioByWeather();
+        function toggleSettings() {
+            document.getElementById('setting-panel').classList.toggle('open');
         }
 
-        function updateAudioByWeather() {
-            if (!noiseNode) return;
-            const vol = parseFloat(document.getElementById('volume-slider').value);
+        // --- 程序化音訊引擎 ---
+        function initAudioEngine() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             
+            // 建立兩個獨立的 GainNode
+            bgmGain = audioCtx.createGain();
+            envGain = audioCtx.createGain();
+            
+            bgmGain.connect(audioCtx.destination);
+            envGain.connect(audioCtx.destination);
+            
+            updateVolume(); // 初始化音量
+
+            // 1. 渲染背景音樂 (BGM)
+            bgmOsc = audioCtx.createOscillator();
+            bgmOsc.type = 'square';
+            bgmOsc.frequency.setValueAtTime(110, audioCtx.currentTime);
+            
+            const notes = [110, 123, 130, 98, 110, 146, 130];
+            let i = 0;
+            setInterval(() => {
+                const now = audioCtx.currentTime;
+                bgmOsc.frequency.setTargetAtTime(notes[i % notes.length], now, 0.1);
+                i++;
+            }, 800);
+
+            bgmOsc.connect(bgmGain);
+            bgmOsc.start();
+
+            // 2. 渲染環境噪音 (RAIN/WIND)
+            const bufferSize = 2 * audioCtx.sampleRate;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = buffer.getChannelData(0);
+            for (let j = 0; j < bufferSize; j++) output[j] = Math.random() * 2 - 1;
+
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            noise.loop = true;
+
+            const noiseFilter = audioCtx.createBiquadFilter();
+            noiseFilter.type = "lowpass";
+            noiseFilter.frequency.value = 800;
+
+            noise.connect(noiseFilter);
+            noiseFilter.connect(envGain);
+            noise.start();
+
+            window.noiseFilter = noiseFilter; // 供天氣切換時調整
+            updateEnvAudio();
+        }
+
+        function updateVolume() {
+            if (!bgmGain || !envGain) return;
+            const bgmVal = document.getElementById('vol-bgm').value;
+            const envVal = document.getElementById('vol-env').value;
+            
+            bgmGain.gain.setTargetAtTime(bgmVal * 0.1, audioCtx.currentTime, 0.05); // BGM 較小聲
+            envGain.gain.setTargetAtTime(envVal * 0.2, audioCtx.currentTime, 0.05);
+            
+            document.getElementById('val-bgm').innerText = Math.round(bgmVal * 100) + '%';
+            document.getElementById('val-env').innerText = Math.round(envVal * 100) + '%';
+        }
+
+        function updateEnvAudio() {
+            if (!window.noiseFilter) return;
+            const now = audioCtx.currentTime;
             if (weatherType === "RAIN" || weatherType === "TYPHOON") {
-                noiseNode.gain.gain.setTargetAtTime(0.1 * vol, audioCtx.currentTime, 1);
-                noiseNode.filter.frequency.setTargetAtTime(1000, audioCtx.currentTime, 1);
+                window.noiseFilter.frequency.setTargetAtTime(1200, now, 1);
             } else if (weatherType === "THUNDER") {
-                noiseNode.gain.gain.setTargetAtTime(0.15 * vol, audioCtx.currentTime, 1);
-                noiseNode.filter.frequency.setTargetAtTime(600, audioCtx.currentTime, 1);
+                window.noiseFilter.frequency.setTargetAtTime(600, now, 1);
             } else {
-                noiseNode.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 1);
+                window.noiseFilter.frequency.setTargetAtTime(200, now, 1); // 只有微風
             }
         }
 
@@ -207,54 +223,45 @@
             const g = audioCtx.createGain();
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(40, audioCtx.currentTime);
-            g.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 2);
+            // 雷聲跟隨環境音量控制
+            const envVol = document.getElementById('vol-env').value;
+            g.gain.setValueAtTime(0.4 * envVol, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 3);
             osc.connect(g);
             g.connect(audioCtx.destination);
             osc.start();
-            osc.stop(audioCtx.currentTime + 2);
+            osc.stop(audioCtx.currentTime + 3);
         }
 
-        // --- 天氣與時間 ---
+        // --- 遊戲邏輯與渲染 ---
         function changeWeather() {
             const list = ["SUNNY", "RAIN", "THUNDER", "CLOUDY", "TYPHOON"];
             weatherType = list[(list.indexOf(weatherType) + 1) % list.length];
             document.getElementById('weather-text').innerText = weatherType;
-            updateAudioByWeather();
+            updateEnvAudio();
         }
 
-        function getAdjustedTime() {
+        function getLocalTime() {
             const now = new Date();
             const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
             return new Date(utc + (3600000 * utcOffset));
         }
 
-        // --- 命名邏輯 ---
-        function updateDadIdentity() {
-            let prefix = "";
-            if (state.addiction > 70) prefix = "神智不清的廢物重度毒蟲";
-            else if (state.addiction > 30) prefix = "頹廢的毒蟲";
-            else if (state.addiction > 0) prefix = state.isRecovering ? "努力戒毒中的毒蟲" : "邊緣掙扎的廢物毒蟲";
-            else prefix = "煥然一新的好";
-            document.getElementById('dad-title').innerText = `${playerName}的${prefix}老爹`;
-        }
-
-        // --- 渲染 Loop ---
         function draw() {
-            const time = getAdjustedTime();
+            const time = getLocalTime();
             document.getElementById('clock-display').innerText = time.toTimeString().split(' ')[0];
             const hour = time.getHours();
 
             // 1. 窗外底色
-            let skyBase = "#1e1b4b"; // 深夜
-            if (hour >= 6 && hour < 10) skyBase = "#fb923c"; // 晨
-            if (hour >= 10 && hour < 16) skyBase = "#38bdf8"; // 晝
-            if (hour >= 16 && hour < 19) skyBase = "#4338ca"; // 暮
+            let sky = "#1e1b4b"; // 深夜
+            if (hour >= 6 && hour < 10) sky = "#fb923c"; // 晨
+            if (hour >= 10 && hour < 16) sky = "#38bdf8"; // 晝
+            if (hour >= 16 && hour < 19) sky = "#4338ca"; // 暮
             
-            ctx.fillStyle = skyBase;
+            ctx.fillStyle = sky;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 2. 窗外天文 (太陽/月亮)
+            // 2. 太陽/月亮
             const sunY = 40 + Math.sin((hour - 6) * Math.PI / 12) * -20;
             if (hour >= 6 && hour <= 18) {
                 ctx.fillStyle = "#fde047";
@@ -264,72 +271,41 @@
                 ctx.beginPath(); ctx.arc(180, 40, 5, 0, Math.PI*2); ctx.fill();
             }
 
-            // 3. 窗戶框架 (中間大窗)
-            const winX = 40, winY = 20, winW = 80, winH = 60;
-            
-            // 窗外粒子
-            if (weatherType !== "SUNNY") {
-                ctx.strokeStyle = "rgba(255,255,255,0.3)";
-                weatherParticles.forEach(p => {
-                    ctx.beginPath();
-                    ctx.moveTo(p.x, p.y);
-                    ctx.lineTo(p.x - p.angle*5, p.y + 5);
-                    ctx.stroke();
-                });
-            }
+            // 3. 窗外粒子與室內遮蓋
+            updateParticles();
+            ctx.strokeStyle = "rgba(255,255,255,0.3)";
+            weatherParticles.forEach(p => {
+                ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.angle*5, p.y + 5); ctx.stroke();
+            });
 
-            // 室內牆面遮蓋
+            // 室內牆與地板
             ctx.fillStyle = "#0f172a";
-            // 挖洞 (窗戶)
-            ctx.fillRect(0, 0, winX, 160);
-            ctx.fillRect(winX + winW, 0, canvas.width - (winX+winW), 160);
-            ctx.fillRect(winX, 0, winW, winY);
-            ctx.fillRect(winX, winY + winH, winW, 160 - (winY+winH));
-            
-            // 窗框線條
-            ctx.strokeStyle = "#1e293b";
-            ctx.lineWidth = 2;
-            ctx.strokeRect(winX, winY, winW, winH);
-            ctx.beginPath(); ctx.moveTo(winX + winW/2, winY); ctx.lineTo(winX+winW/2, winY+winH); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(winX, winY + winH/2); ctx.lineTo(winX+winW, winY+winH/2); ctx.stroke();
+            ctx.fillRect(0, 0, 40, 160); ctx.fillRect(120, 0, 120, 160);
+            ctx.fillRect(40, 0, 80, 20); ctx.fillRect(40, 80, 80, 80);
+            ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 2; ctx.strokeRect(40, 20, 80, 60);
 
             // 4. 老爹渲染
-            const dadBreathe = Math.sin(Date.now() / 500) * 1.5;
+            const breathe = Math.sin(Date.now() / 500) * 1.5;
             const dx = 160, dy = 135;
-            
-            // 身體
-            ctx.fillStyle = "#475569";
-            ctx.fillRect(dx-6, dy-18+dadBreathe, 12, 18);
-            // 頭
-            ctx.fillStyle = "#fecaca";
-            ctx.fillRect(dx-5, dy-28+dadBreathe*1.2, 10, 10);
-            // 眼睛
+            ctx.fillStyle = "#475569"; ctx.fillRect(dx-6, dy-18+breathe, 12, 18); // 身體
+            ctx.fillStyle = "#fecaca"; ctx.fillRect(dx-5, dy-28+breathe*1.2, 10, 10); // 頭
             ctx.fillStyle = state.addiction > 50 ? "#ef4444" : "#000";
-            ctx.fillRect(dx-3, dy-24+dadBreathe, 2, 2);
-            ctx.fillRect(dx+1, dy-24+dadBreathe, 2, 2);
+            ctx.fillRect(dx-3, dy-24+breathe, 2, 2); ctx.fillRect(dx+1, dy-24+breathe, 2, 2);
 
-            // 5. 地板
-            ctx.fillStyle = "#1e293b";
-            ctx.fillRect(0, 140, 240, 20);
+            ctx.fillStyle = "#1e293b"; ctx.fillRect(0, 140, 240, 20); // 地板
 
-            // 6. 晝夜與天氣遮罩
-            let maskOpacity = 0;
-            if (hour < 5 || hour > 20) maskOpacity = 0.5; // 深夜
-            else if (hour < 7 || hour > 18) maskOpacity = 0.2; // 昏暗
-            
-            if (weatherType === "CLOUDY" || weatherType === "RAIN") maskOpacity += 0.1;
-            if (weatherType === "TYPHOON") maskOpacity += 0.2;
-
-            ctx.fillStyle = `rgba(0, 0, 50, ${maskOpacity})`;
+            // 5. 晝夜遮罩與雷擊
+            let mask = 0;
+            if (hour < 5 || hour > 20) mask = 0.5;
+            else if (hour < 7 || hour > 18) mask = 0.2;
+            ctx.fillStyle = `rgba(0, 0, 40, ${mask})`;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 閃電觸發
             if (weatherType === "THUNDER" && Math.random() > 0.99) {
-                flashOpacity = 0.8;
-                playThunderStrike();
+                flashOpacity = 0.7; playThunderStrike();
             }
             if (flashOpacity > 0) {
-                ctx.fillStyle = `rgba(255, 255, 255, ${flashOpacity})`;
+                ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 flashOpacity -= 0.05;
             }
@@ -340,34 +316,26 @@
                 for (let i = 0; i < (weatherType === "TYPHOON" ? 10 : 3); i++) {
                     weatherParticles.push({
                         x: Math.random() * 240 + (weatherType === "TYPHOON" ? 40 : 0),
-                        y: -5,
-                        v: Math.random() * 5 + 5,
+                        y: -5, v: Math.random() * 5 + 5,
                         angle: weatherType === "TYPHOON" ? 0.6 : 0
                     });
                 }
             }
             weatherParticles = weatherParticles.filter(p => {
-                p.y += p.v;
-                p.x -= (p.angle * p.v);
-                return p.y < 160;
+                p.y += p.v; p.x -= (p.angle * p.v); return p.y < 160;
             });
         }
 
         function gameLoop() {
-            updateParticles();
-            updateDadIdentity();
             draw();
-            
-            // 邏輯數值更新
-            state.addiction += 0.005;
-            document.getElementById('bar-addiction').style.width = `${Math.min(100, state.addiction)}%`;
-            document.getElementById('label-addiction').innerText = `${Math.floor(state.addiction)}%`;
-
+            // 標題演化
+            let adj = state.addiction > 70 ? "神智不清的重度毒蟲" : (state.addiction > 30 ? "頹廢的毒蟲" : "邊緣掙扎的廢物毒蟲");
+            document.getElementById('dad-title').innerText = `${playerName}的${adj}老爹`;
+            state.addiction += 0.001;
+            document.getElementById('bar-addiction').style.width = state.addiction + '%';
+            document.getElementById('label-addiction').innerText = Math.floor(state.addiction) + '%';
             requestAnimationFrame(gameLoop);
         }
-
-        // 音量控制監聽
-        document.getElementById('volume-slider').addEventListener('input', updateAudioByWeather);
     </script>
 </body>
 </html>
